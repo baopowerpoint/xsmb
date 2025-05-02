@@ -1,0 +1,9 @@
+numpy
+pandas
+scikit-learn
+matplotlib
+seaborn
+tqdm
+joblib          # dùng trong lưu/đọc mô hình RF :contentReference[oaicite:0]{index=0}:contentReference[oaicite:1]{index=1}
+torch           # PyTorch cho LSTM :contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
+tensorflow      # Tùy chọn nếu muốn huấn luyện LSTM bằng TF/Keras :contentReference[oaicite:4]{index=4}:contentReference[oaicite:5]{index=5}
