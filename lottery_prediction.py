@@ -1,23 +1,372 @@
-#!/usr/bin/env python3
+def generate_report(self, top_n=10):
+        """
+        Tạo báo cáo dự đoán đầy đủ.
+        
+        Args:
+            top_n (int): Số lượng số cần dự đoán.
+            
+        Returns:
+            dict: Từ điển chứa kết quả dự đoán từ các phương pháp.
+        """
+        print("\n📋 Tạo báo cáo dự đoán...")
+        
+        # Lấy ngày gần nhất và dự đoán cho ngày tiếp theo
+        last_date = self.analyzer.processed_data['date'].max()
+        next_date = last_date + timedelta(days=1)
+        
+        print(f"\n🗓️ Dự báo kết quả ngày {next_date.day} tháng {next_date.month} năm {next_date.year}")
+        print("=" * 50)
+        
+        # Dictionary để lưu kết quả từ các phương pháp
+        results = {}
+        
+        # Tổng số bản ghi để tính phần trăm
+        total_records = len(self.analyzer.processed_data)
+        
+        # 1. Dự đoán theo tần suất
+        freq_predictions = self.predict_by_frequency(top_n=top_n)
+        results['Tần suất'] = freq_predictions
+        
+        # Tính tổng số lần xuất hiện để tính phần trăm
+        total_appearances = sum([count for _, count in freq_predictions])
+        
+        print("\n📊 Kết quả dự đoán theo tần suất:")
+        print("-" * 40)
+        print(f"{'Số':^5} | {'Tần suất':^10} | {'Phần trăm (%)':<15}")
+        print("-" * 40)
+        for num, count in freq_predictions:
+            percentage = (count / total_appearances) * 100
+            print(f"{num:^5} | {count:^10} | {percentage:>15.2f}%")
+        
+        # 2. Dự đoán theo mẫu
+        pattern_predictions = self.predict_by_pattern(top_n=top_n)
+        results['Mẫu'] = pattern_predictions
+        
+        # Tính tổng điểm để tính phần trăm
+        total_weight = sum([weight for _, weight in pattern_predictions])
+        
+        print("\n🔍 Kết quả dự đoán theo mẫu:")
+        print("-" * 40)
+        print(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}")
+        print("-" * 40)
+        for num, weight in pattern_predictions:
+            percentage = (weight / total_weight) * 100
+            print(f"{num:^5} | {weight:^10.2f} | {percentage:>15.2f}%")
+        
+        # 3. Dự đoán theo học máy (nếu có)
+        if self.ml_model is not None:
+            ml_predictions = self.predict_by_machine_learning(top_n=top_n)
+            results['Học máy'] = ml_predictions
+            
+            print("\n🤖 Kết quả dự đoán theo học máy:")
+            print("-" * 40)
+            print(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}")
+            print("-" * 40)
+            for num, prob in ml_predictions:
+                print(f"{num:^5} | {prob*100:^10.2f}% | {prob*100:>15.2f}%")
+        
+        # 4. Dự đoán theo ensemble (nếu có)
+        if self.ensemble_model is not None:
+            ensemble_predictions = self.predict_by_ensemble(top_n=top_n)
+            results['Tổng hợp'] = ensemble_predictions
+            
+            print("\n🔄 Kết quả dự đoán theo mô hình tổng hợp:")
+            print("-" * 40)
+            print(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}")
+            print("-" * 40)
+            for num, prob in ensemble_predictions:
+                print(f"{num:^5} | {prob*100:^10.2f}% | {prob*100:>15.2f}%")
+        
+        # 5. Dự đoán theo LSTM (nếu có)
+        if PYTORCH_AVAILABLE and self.lstm_model is not None:
+            lstm_predictions = self.predict_by_lstm(top_n=top_n)
+            results['LSTM'] = lstm_predictions
+            
+            print("\n🧠 Kết quả dự đoán theo LSTM:")
+            print("-" * 40)
+            print(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}")
+            print("-" * 40)
+            for num, prob in lstm_predictions:
+                print(f"{num:^5} | {prob*100:^10.2f}% | {prob*100:>15.2f}%")
+        
+        # 6. Kết hợp tất cả các phương pháp
+        combined_predictions = self.combine_predictions(top_n=top_n)
+        results['Kết hợp'] = combined_predictions
+        
+        # Tính tổng điểm để tính phần trăm
+        total_score = sum([score for _, score in combined_predictions])
+        
+        print("\n🌟 KẾT QUẢ DỰ ĐOÁN CUỐI CÙNG:")
+        print("=" * 40)
+        print(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}")
+        print("=" * 40)
+        for num, score in combined_predictions:
+            percentage = (score / total_score) * 100
+            print(f"{num:^5} | {score:^10.4f} | {percentage:>15.2f}%")
+        
+        # Trực quan hóa kết quả
+        self.visualize_results(results)
+        
+        # Lưu kết quả dự đoán ra file
+        self._save_prediction_results(results, next_date)
+        
+        return results
+    
+    def _save_prediction_results(self, results, prediction_date):
+        """
+        Lưu kết quả dự đoán ra file.
+        
+        Args:
+            results (dict): Từ điển chứa kết quả dự đoán.
+            prediction_date (datetime): Ngày dự đoán.
+        """
+        # Tạo thư mục lưu kết quả nếu chưa tồn tại
+        results_dir = "predictions"
+        if not os.path.exists(results_dir):
+            os.makedirs(results_dir)
+        
+        # Tên file kết quả
+        filename = os.path.join(results_dir, f"prediction_{prediction_date.strftime('%Y-%m-%d')}.txt")
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            # Tiêu đề
+            f.write(f"DỰ BÁO KẾT QUẢ NGÀY {prediction_date.day} THÁNG {prediction_date.month} NĂM {prediction_date.year}\n")
+            f.write("=" * 50 + "\n\n")
+            
+            # Ghi kết quả từng phương pháp
+            for method, preds in results.items():
+                f.write(f"{method.upper()}:\n")
+                f.write("-" * 40 + "\n")
+                
+                if method in ['Học máy', 'LSTM', 'Tổng hợp']:
+                    f.write(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}\n")
+                    total = sum([prob for _, prob in preds])
+                    for num, prob in preds:
+                        percentage = (prob / total) * 100 if total > 0 else 0
+                        f.write(f"{num:^5} | {prob*100:^10.2f}% | {percentage:>15.2f}%\n")
+                else:
+                    if method == 'Tần suất':
+                        f.write(f"{'Số':^5} | {'Tần suất':^10} | {'Phần trăm (%)':<15}\n")
+                        total = sum([count for _, count in preds])
+                        for num, count in preds:
+                            percentage = (count / total) * 100 if total > 0 else 0
+                            f.write(f"{num:^5} | {count:^10} | {percentage:>15.2f}%\n")
+                    else:
+                        f.write(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}\n")
+                        total = sum([score for _, score in preds])
+                        for num, score in preds:
+                            percentage = (score / total) * 100 if total > 0 else 0
+                            f.write(f"{num:^5} | {score:^10.4f} | {percentage:>15.2f}%\n")
+                
+                f.write("\n")
+            
+            # Ghi kết quả cuối cùng
+            f.write("\nKẾT QUẢ DỰ ĐOÁN CUỐI CÙNG:\n")
+            f.write("=" * 40 + "\n")
+            f.write(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}\n")
+            f.write("=" * 40 + "\n")
+            
+            combined = results.get('Kết hợp', [])
+            total_score = sum([score for _, score in combined])
+            
+            for num, score in combined:
+                percentage = (score / total_score) * 100 if total_score > 0 else 0
+                f.write(f"{num:^5} | {score:^10.4f} | {percentage:>15.2f}%\n")
+        
+        print(f"\n💾 Đã lưu kết quả dự đoán vào file {filename}")
+
+
+def main():
+    """
+    Hàm chính để chạy chương trình.
+    """
+    # Phân tích tham số dòng lệnh
+    parser = argparse.ArgumentParser(
+        description='Dự đoán kết quả xổ số dựa trên dữ liệu lịch sử.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    
+    parser.add_argument('--data', '-d', required=True,
+                        help='Đường dẫn đến file JSON chứa dữ liệu lịch sử.')
+    
+    parser.add_argument('--top', '-t', type=int, default=10,
+                        help='Số lượng con số muốn dự đoán.')
+    
+    parser.add_argument('--train', '-tr', action='store_true',
+                        help='Huấn luyện các mô hình học máy.')
+    
+    parser.add_argument('--load', '-l', action='store_true',
+                        help='Tải các mô hình đã lưu.')
+    
+    parser.add_argument('--visualize', '-v', action='store_true',
+                        help='Hiển thị biểu đồ phân tích dữ liệu.')
+    
+    parser.add_argument('--hot', type=int, default=0,
+                        help='Hiển thị N số nóng (số xuất hiện nhiều nhất).')
+    
+    parser.add_argument('--cold', type=int, default=0,
+                        help='Hiển thị N số lạnh (số lâu không xuất hiện).')
+    
+    parser.add_argument('--pairs', type=int, default=0,
+                        help='Hiển thị N cặp số hay xuất hiện cùng nhau.')
+    
+    parser.add_argument('--use-lstm', action='store_true',
+                        help='Cố gắng sử dụng mô hình LSTM (yêu cầu PyTorch).')
+    
+    args = parser.parse_args()
+    
+    try:
+        # Hiển thị thông tin tiến trình
+        print("🚀 Bắt đầu chương trình dự đoán xổ số...")
+        print(f"📂 Đường dẫn dữ liệu: {args.data}")
+        print(f"🔢 Số lượng dự đoán: {args.top}")
+        print("=" * 50)
+        
+        # Tạo đối tượng phân tích
+        analyzer = LotteryAnalyzer(args.data)
+        
+        # Hiển thị % tiến trình
+        print("⏳ Tiến trình: 10% - Đọc dữ liệu")
+        analyzer.load_data()
+        
+        print("⏳ Tiến trình: 25% - Xử lý dữ liệu")
+        analyzer.preprocess_data()
+        
+        # Hiển thị thông tin phân tích nếu cần
+        if args.visualize:
+            print("⏳ Tiến trình: 35% - Trực quan hóa dữ liệu")
+            analyzer.visualize_number_frequency()
+            
+            # Phân tích phân phối các số
+            distribution = analyzer.analyze_number_distribution()
+            
+            # Hiển thị phân phối theo chữ số đầu
+            plt.figure(figsize=(10, 6))
+            first_digits = sorted(distribution['first_digit'].items())
+            plt.bar([x[0] for x in first_digits], [x[1] for x in first_digits], color='seagreen')
+            plt.title('Phân phối theo chữ số đầu', fontsize=14)
+            plt.xlabel('Chữ số đầu', fontsize=12)
+            plt.ylabel('Tần suất', fontsize=12)
+            plt.grid(axis='y', linestyle='--', alpha=0.7)
+            plt.show()
+            
+            # Hiển thị phân phối theo chữ số cuối
+            plt.figure(figsize=(10, 6))
+            second_digits = sorted(distribution['second_digit'].items())
+            plt.bar([x[0] for x in second_digits], [x[1] for x in second_digits], color='indianred')
+            plt.title('Phân phối theo chữ số cuối', fontsize=14)
+            plt.xlabel('Chữ số cuối', fontsize=12)
+            plt.ylabel('Tần suất', fontsize=12)
+            plt.grid(axis='y', linestyle='--', alpha=0.7)
+            plt.show()
+            
+            # Hiển thị phân phối theo tổng chữ số
+            plt.figure(figsize=(12, 6))
+            sum_digits = sorted(distribution['sum_digits'].items())
+            plt.bar([x[0] for x in sum_digits], [x[1] for x in sum_digits], color='royalblue')
+            plt.title('Phân phối theo tổng chữ số', fontsize=14)
+            plt.xlabel('Tổng chữ số', fontsize=12)
+            plt.ylabel('Tần suất', fontsize=12)
+            plt.grid(axis='y', linestyle='--', alpha=0.7)
+            plt.show()
+            
+            # Hiển thị phân phối chẵn/lẻ
+            plt.figure(figsize=(8, 6))
+            even_odd = distribution['even_odd']
+            plt.pie([even_odd['even'], even_odd['odd'], even_odd['mixed']],
+                    labels=['Chẵn-Chẵn', 'Lẻ-Lẻ', 'Hỗn hợp'],
+                    autopct='%1.1f%%',
+                    startangle=90,
+                    colors=['lightcoral', 'lightblue', 'lightgreen'])
+            plt.title('Phân phối số theo tính chất chẵn/lẻ', fontsize=14)
+            plt.show()
+            
+            # Hiển thị xu hướng của 5 số phổ biến
+            hot_numbers = [x[0] for x in analyzer.get_hot_numbers(5)]
+            analyzer.visualize_trends(hot_numbers)
+        
+        # Hiển thị số nóng nếu cần
+        if args.hot > 0:
+            print("⏳ Tiến trình: 40% - Phân tích số nóng")
+            hot_numbers = analyzer.get_hot_numbers(args.hot)
+            print("\n🔥 Các số nóng (xuất hiện nhiều nhất):")
+            print("-" * 30)
+            print(f"{'Số':^5} | {'Tần suất':^10}")
+            print("-" * 30)
+            for num, count in hot_numbers:
+                print(f"{num:^5} | {count:^10}")
+        
+        # Hiển thị số lạnh nếu cần
+        if args.cold > 0:
+            print("⏳ Tiến trình: 45% - Phân tích số lạnh")
+            cold_numbers = analyzer.get_cold_numbers(args.cold)
+            print("\n❄️ Các số lạnh (lâu không xuất hiện):")
+            print("-" * 30)
+            print(f"{'Số':^5} | {'Số ngày':^10}")
+            print("-" * 30)
+            for num, days in cold_numbers:
+                if days == float('inf'):
+                    print(f"{num:^5} | {'Chưa xuất hiện':^10}")
+                else:
+                    print(f"{num:^5} | {days:^10}")
+        
+        # Hiển thị cặp số nếu cần
+        if args.pairs > 0:
+            print("⏳ Tiến trình: 50% - Phân tích cặp số")
+            hot_pairs = analyzer.get_hot_pairs(args.pairs)
+            print("\n👫 Các cặp số hay xuất hiện cùng nhau:")
+            print("-" * 30)
+            print(f"{'Cặp số':^10} | {'Tần suất':^10}")
+            print("-" * 30)
+            for pair, count in hot_pairs:
+                print(f"{pair[0]}-{pair[1]:^10} | {count:^10}")
+        
+        # Tạo đối tượng dự đoán
+        print("⏳ Tiến trình: 55% - Khởi tạo mô hình dự đoán")
+        predictor = LotteryPredictor(analyzer)
+        
+        # Tải mô hình nếu cần
+        if args.load:
+            print("⏳ Tiến trình: 60% - Tải mô hình đã lưu")
+            predictor.load_models()
+        
+        # Huấn luyện mô hình nếu cần
+        if args.train:
+            print("⏳ Tiến trình: 65% - Huấn luyện mô hình học máy")
+            # Huấn luyện mô hình học máy
+            predictor.train_machine_learning_model()
+            
+            print("⏳ Tiến trình: 75% - Tạo mô hình tổng hợp")
+            # Tạo mô hình tổng hợp
+            predictor.create_ensemble_model()
+            
+            # Huấn luyện mô hình LSTM nếu có
+            if args.use_lstm and PYTORCH_AVAILABLE:
+                print("⏳ Tiến trình: 85% - Huấn luyện mô hình LSTM")
+                predictor.train_lstm_model()
+        
+        # Tạo báo cáo dự đoán
+        print("⏳ Tiến trình: 95% - Tạo báo cáo dự đoán")
+        predictor.generate_report(args.top)
+        
+        print("\n✅ Tiến trình: 100% - Hoàn thành!")
+        print("=" * 50)
+        
+    except Exception as e:
+        print(f"\n❌ Lỗi: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+    
+    return 0
+
+if __name__ == "__main__":
+    main()#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
 Chương trình dự đoán kết quả xổ số nâng cao sử dụng nhiều phương pháp học máy và phân tích khác nhau.
 """
-
-import json
-import argparse
-import numpy as np
-import pandas as pd
-from collections import Counter
-from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
-import seaborn as sns
-from tqdm import tqdm
-import pickle
-import os
-import warnings
-warnings.filterwarnings('ignore')
 
 import json
 import argparse
@@ -46,19 +395,19 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 
-# Kiểm tra TensorFlow nhưng không cố nhập nếu có lỗi
-TENSORFLOW_AVAILABLE = False
+# Kiểm tra PyTorch nhưng không cố nhập nếu có lỗi
+PYTORCH_AVAILABLE = False
 try:
-    # Chỉ thử nhập TensorFlow nếu người dùng chỉ định sử dụng LSTM
+    # Chỉ thử nhập PyTorch nếu người dùng chỉ định sử dụng LSTM
     if '--use-lstm' in os.sys.argv:
-        import tensorflow as tf
-        from tensorflow.keras.models import Sequential
-        from tensorflow.keras.layers import Dense, LSTM, Dropout, BatchNormalization
-        from tensorflow.keras.callbacks import EarlyStopping
-        TENSORFLOW_AVAILABLE = True
+        import torch
+        import torch.nn as nn
+        import torch.optim as optim
+        from torch.utils.data import Dataset, DataLoader, TensorDataset
+        PYTORCH_AVAILABLE = True
 except ImportError:
-    print("⚠️ TensorFlow không khả dụng hoặc không tương thích. Chương trình sẽ không sử dụng mô hình LSTM.")
-    TENSORFLOW_AVAILABLE = False
+    print("⚠️ PyTorch không khả dụng hoặc không tương thích. Chương trình sẽ không sử dụng mô hình LSTM.")
+    PYTORCH_AVAILABLE = False
 
 class LotteryAnalyzer:
     """
@@ -549,7 +898,7 @@ class LotteryAnalyzer:
         X_seq = []
         y_seq = []
         
-        if TENSORFLOW_AVAILABLE:
+        if PYTORCH_AVAILABLE:
             # Tạo dữ liệu chuỗi cho LSTM
             for i in tqdm(range(sequence_length, len(self.processed_data)), desc="Đặc trưng chuỗi"):
                 # Tạo chuỗi các kỳ quay trước
@@ -598,10 +947,10 @@ class LotteryAnalyzer:
         y_freq = np.array(y_freq)
         
         print(f"✅ Đã tạo {len(X_freq)} mẫu đặc trưng cho mô hình tần suất.")
-        if TENSORFLOW_AVAILABLE:
+        if PYTORCH_AVAILABLE:
             print(f"✅ Đã tạo {len(X_seq)} mẫu đặc trưng cho mô hình chuỗi.")
         
-        return (X_freq, y_freq), (X_seq, y_seq) if TENSORFLOW_AVAILABLE else (None, None)
+        return (X_freq, y_freq), (X_seq, y_seq) if PYTORCH_AVAILABLE else (None, None)
 
 class LotteryPredictor:
     """
@@ -789,7 +1138,7 @@ class LotteryPredictor:
         
         self.ml_model = best_model
         return best_model, accuracy
-    
+        
     def train_lstm_model(self, save_model=True):
         """
         Huấn luyện mô hình LSTM để dự đoán.
@@ -800,8 +1149,8 @@ class LotteryPredictor:
         Returns:
             tuple: (model, accuracy) - Mô hình đã huấn luyện và độ chính xác.
         """
-        if not TENSORFLOW_AVAILABLE:
-            print("❌ TensorFlow không khả dụng, không thể huấn luyện mô hình LSTM.")
+        if not PYTORCH_AVAILABLE:
+            print("❌ PyTorch không khả dụng, không thể huấn luyện mô hình LSTM.")
             return None, 0
         
         print("\n🧠 Huấn luyện mô hình LSTM...")
@@ -812,59 +1161,124 @@ class LotteryPredictor:
         # Chia dữ liệu thành tập huấn luyện và tập kiểm tra
         X_train, X_test, y_train, y_test = train_test_split(X_seq, y_seq, test_size=0.2, random_state=42)
         
-        # Thiết kế mô hình LSTM
-        model = Sequential([
-            LSTM(128, input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True),
-            Dropout(0.2),
-            BatchNormalization(),
-            LSTM(64),
-            Dropout(0.2),
-            BatchNormalization(),
-            Dense(128, activation='relu'),
-            Dropout(0.2),
-            Dense(100, activation='sigmoid')
-        ])
+        # Chuyển sang tensor PyTorch
+        X_train_tensor = torch.FloatTensor(X_train)
+        y_train_tensor = torch.FloatTensor(y_train)
+        X_test_tensor = torch.FloatTensor(X_test)
+        y_test_tensor = torch.FloatTensor(y_test)
         
-        # Biên dịch mô hình
-        model.compile(
-            optimizer='adam',
-            loss='binary_crossentropy',
-            metrics=['accuracy']
-        )
+        # Tạo dataset và dataloader
+        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
         
-        # Early stopping để tránh overfitting
-        early_stopping = EarlyStopping(
-            monitor='val_loss',
-            patience=10,
-            restore_best_weights=True
-        )
+        train_loader = DataLoader(dataset=train_dataset, batch_size=32, shuffle=True)
+        test_loader = DataLoader(dataset=test_dataset, batch_size=32, shuffle=False)
+        
+        # Tham số mô hình
+        input_dim = X_train.shape[2]  # Số đặc trưng đầu vào
+        hidden_dim = 128  # Kích thước lớp ẩn
+        layer_dim = 2    # Số lớp LSTM
+        output_dim = 100  # Số lớp đầu ra (100 số từ 00-99)
+        dropout_prob = 0.2  # Tỉ lệ dropout
+        
+        # Khởi tạo mô hình
+        model = LSTMModel(input_dim, hidden_dim, layer_dim, output_dim, dropout_prob)
+        
+        # Hàm mất mát và optimizer
+        criterion = nn.BCELoss()  # Binary Cross Entropy Loss
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        
+        # Tham số huấn luyện
+        num_epochs = 50
+        best_loss = float('inf')
+        patience = 10
+        counter = 0
+        best_model_state = None
         
         # Huấn luyện mô hình
         print("🏋️‍♂️ Bắt đầu huấn luyện LSTM...")
-        history = model.fit(
-            X_train, y_train,
-            epochs=50,
-            batch_size=32,
-            validation_split=0.2,
-            callbacks=[early_stopping],
-            verbose=1
-        )
+        for epoch in range(num_epochs):
+            model.train()
+            train_loss = 0
+            
+            # Vòng lặp huấn luyện
+            for batch_X, batch_y in train_loader:
+                # Forward pass
+                outputs = model(batch_X)
+                loss = criterion(outputs, batch_y)
+                
+                # Backward và optimize
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                train_loss += loss.item()
+            
+            # Tính loss trung bình
+            train_loss = train_loss / len(train_loader)
+            
+            # Đánh giá trên tập kiểm tra
+            model.eval()
+            test_loss = 0
+            
+            with torch.no_grad():
+                for batch_X, batch_y in test_loader:
+                    outputs = model(batch_X)
+                    loss = criterion(outputs, batch_y)
+                    test_loss += loss.item()
+            
+            test_loss = test_loss / len(test_loader)
+            
+            # In thông tin
+            print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss:.4f}, Val Loss: {test_loss:.4f}')
+            
+            # Early stopping
+            if test_loss < best_loss:
+                best_loss = test_loss
+                best_model_state = model.state_dict()
+                counter = 0
+            else:
+                counter += 1
+                if counter >= patience:
+                    print(f'Early stopping tại epoch {epoch+1}')
+                    break
+        
+        # Khôi phục mô hình tốt nhất
+        if best_model_state:
+            model.load_state_dict(best_model_state)
         
         # Đánh giá mô hình
-        loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
+        model.eval()
+        y_pred_list = []
+        with torch.no_grad():
+            for batch_X, _ in test_loader:
+                y_pred = model(batch_X)
+                y_pred_list.append(y_pred.numpy())
+        
+        y_pred = np.vstack(y_pred_list)
+        
+        # Đánh giá theo độ chính xác của top k dự đoán
+        accuracy = 0.0
+        for i in range(len(y_test)):
+            true_indices = np.where(y_test[i] > 0.5)[0]
+            top_k_pred = np.argsort(y_pred[i])[::-1][:len(true_indices)]
+            correct = len(set(true_indices) & set(top_k_pred))
+            accuracy += correct / len(true_indices) if len(true_indices) > 0 else 0
+        
+        accuracy = accuracy / len(y_test) * 100
         print(f"📊 Hiệu suất mô hình LSTM:")
-        print(f"  - Độ chính xác: {accuracy*100:.2f}%")
-        print(f"  - Loss: {loss:.4f}")
+        print(f"  - Độ chính xác: {accuracy:.2f}%")
+        print(f"  - Loss: {best_loss:.4f}")
         
         # Lưu mô hình nếu cần
         if save_model:
-            model_path = os.path.join(self.models_dir, "lstm_model")
-            model.save(model_path)
+            model_path = os.path.join(self.models_dir, "lstm_model.pt")
+            torch.save(model.state_dict(), model_path)
             print(f"💾 Đã lưu mô hình LSTM tại {model_path}")
         
         self.lstm_model = model
         return model, accuracy
-    
+
     def create_ensemble_model(self, save_model=True):
         """
         Tạo mô hình tổng hợp từ nhiều mô hình khác nhau.
@@ -974,10 +1388,28 @@ class LotteryPredictor:
                 print(f"✅ Đã tải bộ chuẩn hóa từ {scaler_path}")
             
             # Tải mô hình LSTM
-            lstm_model_path = os.path.join(self.models_dir, "lstm_model")
-            if TENSORFLOW_AVAILABLE and os.path.exists(lstm_model_path):
-                self.lstm_model = tf.keras.models.load_model(lstm_model_path)
-                print(f"✅ Đã tải mô hình LSTM từ {lstm_model_path}")
+            lstm_model_path = os.path.join(self.models_dir, "lstm_model.pt")
+            if PYTORCH_AVAILABLE and os.path.exists(lstm_model_path):
+                # Khởi tạo mô hình với cấu trúc giống như khi huấn luyện
+                input_dim = 0  # Sẽ được cập nhật sau
+                hidden_dim = 128
+                layer_dim = 2
+                output_dim = 100
+                dropout_prob = 0.2
+                
+                # Tính input_dim từ dữ liệu
+                _, (X_seq, _) = self.analyzer.create_features(sequence_length=5)
+                if X_seq is not None:
+                    input_dim = X_seq.shape[2]
+                    
+                    # Khởi tạo mô hình
+                    self.lstm_model = LSTMModel(input_dim, hidden_dim, layer_dim, output_dim, dropout_prob)
+                    
+                    # Tải tham số
+                    self.lstm_model.load_state_dict(torch.load(lstm_model_path))
+                    self.lstm_model.eval()  # Chuyển sang chế độ đánh giá
+                    
+                    print(f"✅ Đã tải mô hình LSTM từ {lstm_model_path}")
             
             return True
             
@@ -1065,616 +1497,79 @@ class LotteryPredictor:
         # Sắp xếp theo xác suất giảm dần và lấy top_n
         number_probs.sort(key=lambda x: x[1], reverse=True)
         return number_probs[:top_n]
-    
-    def predict_by_lstm(self, top_n=10):
-        """
-        Dự đoán bằng mô hình LSTM.
-        
-        Args:
-            top_n (int): Số lượng số cần dự đoán.
-            
-        Returns:
-            list: Danh sách (số, xác suất) theo dự đoán của mô hình LSTM.
-        """
-        if not TENSORFLOW_AVAILABLE or self.lstm_model is None:
-            print("❌ Mô hình LSTM không khả dụng.")
-            return None
-        
-        print("\n🧠 Dự đoán bằng mô hình LSTM...")
-        
-        # Lấy dữ liệu chuỗi mới nhất
-        sequence_length = 5  # Độ dài chuỗi mặc định
-        latest_data = self.analyzer.processed_data.iloc[-sequence_length:]
-        
-        # Tạo chuỗi đầu vào
-        sequence = []
-        last2_columns = [f"{col}_last2" for col in self.analyzer.prize_columns]
-        
-        for idx, row in latest_data.iterrows():
-            # Tạo vector cho kỳ quay
-            draw_vector = []
-            
-            # Thêm các số trong kỳ quay
-            for col in last2_columns:
-                num = int(row[col])
-                draw_vector.append(num)
-            
-            # Thêm đặc trưng thời gian
-            draw_date = row['date']
-            draw_vector.extend([
-                draw_date.dayofweek,
-                draw_date.day,
-                draw_date.month
-            ])
-            
-            sequence.append(draw_vector)
-        
-        # Chuyển thành numpy array
-        X = np.array([sequence])
-        
-        # Dự đoán
-        predictions = self.lstm_model.predict(X)[0]
-        
-        # Tạo danh sách (số, xác suất)
-        number_probs = [(f"{i:02d}", prob) for i, prob in enumerate(predictions)]
-        
-        # Sắp xếp theo xác suất giảm dần và lấy top_n
-        number_probs.sort(key=lambda x: x[1], reverse=True)
-        return number_probs[:top_n]
-    
-    def predict_by_ensemble(self, top_n=10):
-        """
-        Dự đoán bằng mô hình tổng hợp.
-        
-        Args:
-            top_n (int): Số lượng số cần dự đoán.
-            
-        Returns:
-            list: Danh sách (số, xác suất) theo dự đoán của mô hình tổng hợp.
-        """
-        print("\n🔄 Dự đoán bằng mô hình tổng hợp...")
-        
-        if self.ensemble_model is None:
-            print("❌ Chưa có mô hình tổng hợp. Vui lòng gọi phương thức create_ensemble_model() trước.")
-            return None
-        
-        # Dùng cùng một cách tạo đặc trưng như trong predict_by_machine_learning
-        window_size = 10
-        latest_data = self.analyzer.processed_data.iloc[-window_size:]
-        
-        # Tạo đặc trưng
-        last2_columns = [f"{col}_last2" for col in self.analyzer.prize_columns]
-        window_numbers = []
-        for _, row in latest_data.iterrows():
-            for col in last2_columns:
-                window_numbers.append(row[col])
-        
-        window_freq = Counter(window_numbers)
-        
-        current_date = self.analyzer.processed_data.iloc[-1]['date'] + timedelta(days=7)
-        time_features = [
-            current_date.dayofweek,
-            current_date.day,
-            current_date.month,
-            current_date.quarter
-        ]
-        
-        delay_features = []
-        for j in range(100):
-            num_str = f"{j:02d}"
-            delay_features.append(self.analyzer.processed_data.iloc[-1][f'days_since_{num_str}'])
-        
-        feature_vector = []
-        
-        for j in range(100):
-            num_str = f"{j:02d}"
-            freq = window_freq.get(num_str, 0)
-            feature_vector.append(freq)
-        
-        feature_vector.extend(time_features)
-        feature_vector.extend(delay_features)
-        
-        X = np.array([feature_vector])
-        X_scaled = self.scaler.transform(X)
-        
-        # Dự đoán xác suất
-        probabilities = self.ensemble_model.predict_proba(X_scaled)[0]
-        
-        # Tạo danh sách (số, xác suất)
-        number_probs = []
-        for i, prob in enumerate(probabilities):
-            if i < len(self.ensemble_model.classes_) and self.ensemble_model.classes_[i] < 100:
-                class_idx = self.ensemble_model.classes_[i]
-                number = f"{class_idx:02d}"
-                number_probs.append((number, prob))
-        
-        # Sắp xếp theo xác suất giảm dần và lấy top_n
-        number_probs.sort(key=lambda x: x[1], reverse=True)
-        return number_probs[:top_n]
-    
-    def combine_predictions(self, top_n=10):
-        """
-        Kết hợp kết quả dự đoán từ tất cả các phương pháp.
-        
-        Args:
-            top_n (int): Số lượng số cần dự đoán.
-            
-        Returns:
-            list: Danh sách (số, điểm) theo dự đoán tổng hợp.
-        """
-        print("\n🌟 Kết hợp kết quả dự đoán từ tất cả các phương pháp...")
-        
-        predictions = {}
-        weights = {
-            'frequency': 0.2,
-            'pattern': 0.2,
-            'ml': 0.2,
-            'ensemble': 0.3,
-            'lstm': 0.1
-        }
-        
-        # 1. Dự đoán theo tần suất
-        freq_predictions = self.predict_by_frequency(top_n=20)
-        for num, count in freq_predictions:
-            if num not in predictions:
-                predictions[num] = 0
-            # Chuẩn hóa điểm
-            max_count = freq_predictions[0][1]
-            score = (count / max_count) * weights['frequency']
-            predictions[num] += score
-        
-        # 2. Dự đoán theo mẫu
-        pattern_predictions = self.predict_by_pattern(top_n=20)
-        for num, weight in pattern_predictions:
-            if num not in predictions:
-                predictions[num] = 0
-            # Chuẩn hóa điểm
-            max_weight = pattern_predictions[0][1]
-            score = (weight / max_weight) * weights['pattern']
-            predictions[num] += score
-        
-        # 3. Dự đoán theo học máy
-        if self.ml_model is not None:
-            ml_predictions = self.predict_by_machine_learning(top_n=20)
-            for num, prob in ml_predictions:
-                if num not in predictions:
-                    predictions[num] = 0
-                predictions[num] += prob * weights['ml']
-        
-        # 4. Dự đoán theo ensemble
-        if self.ensemble_model is not None:
-            ensemble_predictions = self.predict_by_ensemble(top_n=20)
-            for num, prob in ensemble_predictions:
-                if num not in predictions:
-                    predictions[num] = 0
-                predictions[num] += prob * weights['ensemble']
-        
-        # 5. Dự đoán theo LSTM
-        if TENSORFLOW_AVAILABLE and self.lstm_model is not None:
-            lstm_predictions = self.predict_by_lstm(top_n=20)
-            for num, prob in lstm_predictions:
-                if num not in predictions:
-                    predictions[num] = 0
-                predictions[num] += prob * weights['lstm']
-        
-        # Sắp xếp và lấy top_n
-        combined = [(num, score) for num, score in predictions.items()]
-        combined.sort(key=lambda x: x[1], reverse=True)
-        return combined[:top_n]
-    
-    def visualize_results(self, predictions_dict):
-        """
-        Trực quan hóa kết quả dự đoán từ nhiều phương pháp.
-        
-        Args:
-            predictions_dict (dict): Từ điển chứa kết quả dự đoán từ các phương pháp.
-        """
-        print("\n📊 Trực quan hóa kết quả dự đoán...")
-        
-        # Số lượng phương pháp
-        num_methods = len(predictions_dict)
-        
-        # Tạo lưới đồ thị
-        fig, axes = plt.subplots(1, num_methods, figsize=(5*num_methods, 6))
-        
-        # Nếu chỉ có một phương pháp, axes sẽ không phải là mảng
-        if num_methods == 1:
-            axes = [axes]
-        
-        # Trực quan hóa từng phương pháp
-        for i, (method, preds) in enumerate(predictions_dict.items()):
-            ax = axes[i]
-            
-            # Lấy dữ liệu
-            numbers = [x[0] for x in preds]
-            values = [x[1] for x in preds]
-            
-            # Vẽ biểu đồ cột
-            bars = ax.bar(range(len(numbers)), values, color='royalblue')
-            
-            # Thêm số lên trên mỗi cột
-            for j, bar in enumerate(bars):
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                        numbers[j], ha='center', va='bottom', fontsize=12, fontweight='bold')
-            
-            # Thiết lập trục x và tiêu đề
-            ax.set_xticks([])
-            ax.set_title(method, fontsize=14)
-            
-            # Thêm nhãn y
-            if i == 0:
-                if method == 'Tần suất':
-                    ax.set_ylabel('Tần suất xuất hiện', fontsize=12)
-                elif method in ['Học máy', 'LSTM', 'Tổng hợp']:
-                    ax.set_ylabel('Xác suất', fontsize=12)
-                else:
-                    ax.set_ylabel('Điểm', fontsize=12)
-        
-        plt.tight_layout()
-        plt.show()
-    
-    def generate_report(self, top_n=10):
-        """
-        Tạo báo cáo dự đoán đầy đủ.
-        
-        Args:
-            top_n (int): Số lượng số cần dự đoán.
-            
-        Returns:
-            dict: Từ điển chứa kết quả dự đoán từ các phương pháp.
-        """
-        print("\n📋 Tạo báo cáo dự đoán...")
-        
-        # Lấy ngày gần nhất và dự đoán cho ngày tiếp theo
-        last_date = self.analyzer.processed_data['date'].max()
-        next_date = last_date + timedelta(days=1)
-        
-        print(f"\n🗓️ Dự báo kết quả ngày {next_date.day} tháng {next_date.month} năm {next_date.year}")
-        print("=" * 50)
-        
-        # Dictionary để lưu kết quả từ các phương pháp
-        results = {}
-        
-        # Tổng số bản ghi để tính phần trăm
-        total_records = len(self.analyzer.processed_data)
-        
-        # 1. Dự đoán theo tần suất
-        freq_predictions = self.predict_by_frequency(top_n=top_n)
-        results['Tần suất'] = freq_predictions
-        
-        # Tính tổng số lần xuất hiện để tính phần trăm
-        total_appearances = sum([count for _, count in freq_predictions])
-        
-        print("\n📊 Kết quả dự đoán theo tần suất:")
-        print("-" * 40)
-        print(f"{'Số':^5} | {'Tần suất':^10} | {'Phần trăm (%)':<15}")
-        print("-" * 40)
-        for num, count in freq_predictions:
-            percentage = (count / total_appearances) * 100
-            print(f"{num:^5} | {count:^10} | {percentage:>15.2f}%")
-        
-        # 2. Dự đoán theo mẫu
-        pattern_predictions = self.predict_by_pattern(top_n=top_n)
-        results['Mẫu'] = pattern_predictions
-        
-        # Tính tổng điểm để tính phần trăm
-        total_weight = sum([weight for _, weight in pattern_predictions])
-        
-        print("\n🔍 Kết quả dự đoán theo mẫu:")
-        print("-" * 40)
-        print(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}")
-        print("-" * 40)
-        for num, weight in pattern_predictions:
-            percentage = (weight / total_weight) * 100
-            print(f"{num:^5} | {weight:^10.2f} | {percentage:>15.2f}%")
-        
-        # 3. Dự đoán theo học máy (nếu có)
-        if self.ml_model is not None:
-            ml_predictions = self.predict_by_machine_learning(top_n=top_n)
-            results['Học máy'] = ml_predictions
-            
-            print("\n🤖 Kết quả dự đoán theo học máy:")
-            print("-" * 40)
-            print(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}")
-            print("-" * 40)
-            for num, prob in ml_predictions:
-                print(f"{num:^5} | {prob*100:^10.2f}% | {prob*100:>15.2f}%")
-        
-        # 4. Dự đoán theo ensemble (nếu có)
-        if self.ensemble_model is not None:
-            ensemble_predictions = self.predict_by_ensemble(top_n=top_n)
-            results['Tổng hợp'] = ensemble_predictions
-            
-            print("\n🔄 Kết quả dự đoán theo mô hình tổng hợp:")
-            print("-" * 40)
-            print(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}")
-            print("-" * 40)
-            for num, prob in ensemble_predictions:
-                print(f"{num:^5} | {prob*100:^10.2f}% | {prob*100:>15.2f}%")
-        
-        # 5. Dự đoán theo LSTM (nếu có)
-        if TENSORFLOW_AVAILABLE and self.lstm_model is not None:
-            lstm_predictions = self.predict_by_lstm(top_n=top_n)
-            results['LSTM'] = lstm_predictions
-            
-            print("\n🧠 Kết quả dự đoán theo LSTM:")
-            print("-" * 40)
-            print(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}")
-            print("-" * 40)
-            for num, prob in lstm_predictions:
-                print(f"{num:^5} | {prob*100:^10.2f}% | {prob*100:>15.2f}%")
-        
-        # 6. Kết hợp tất cả các phương pháp
-        combined_predictions = self.combine_predictions(top_n=top_n)
-        results['Kết hợp'] = combined_predictions
-        
-        # Tính tổng điểm để tính phần trăm
-        total_score = sum([score for _, score in combined_predictions])
-        
-        print("\n🌟 KẾT QUẢ DỰ ĐOÁN CUỐI CÙNG:")
-        print("=" * 40)
-        print(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}")
-        print("=" * 40)
-        for num, score in combined_predictions:
-            percentage = (score / total_score) * 100
-            print(f"{num:^5} | {score:^10.4f} | {percentage:>15.2f}%")
-        
-        # Trực quan hóa kết quả
-        self.visualize_results(results)
-        
-        # Lưu kết quả dự đoán ra file
-        self._save_prediction_results(results, next_date)
-        
-        return results
-    
-    def _save_prediction_results(self, results, prediction_date):
-        """
-        Lưu kết quả dự đoán ra file.
-        
-        Args:
-            results (dict): Từ điển chứa kết quả dự đoán.
-            prediction_date (datetime): Ngày dự đoán.
-        """
-        # Tạo thư mục lưu kết quả nếu chưa tồn tại
-        results_dir = "predictions"
-        if not os.path.exists(results_dir):
-            os.makedirs(results_dir)
-        
-        # Tên file kết quả
-        filename = os.path.join(results_dir, f"prediction_{prediction_date.strftime('%Y-%m-%d')}.txt")
-        
-        with open(filename, 'w', encoding='utf-8') as f:
-            # Tiêu đề
-            f.write(f"DỰ BÁO KẾT QUẢ NGÀY {prediction_date.day} THÁNG {prediction_date.month} NĂM {prediction_date.year}\n")
-            f.write("=" * 50 + "\n\n")
-            
-            # Ghi kết quả từng phương pháp
-            for method, preds in results.items():
-                f.write(f"{method.upper()}:\n")
-                f.write("-" * 40 + "\n")
-                
-                if method in ['Học máy', 'LSTM', 'Tổng hợp']:
-                    f.write(f"{'Số':^5} | {'Xác suất':^10} | {'Phần trăm (%)':<15}\n")
-                    total = sum([prob for _, prob in preds])
-                    for num, prob in preds:
-                        percentage = (prob / total) * 100 if total > 0 else 0
-                        f.write(f"{num:^5} | {prob*100:^10.2f}% | {percentage:>15.2f}%\n")
-                else:
-                    if method == 'Tần suất':
-                        f.write(f"{'Số':^5} | {'Tần suất':^10} | {'Phần trăm (%)':<15}\n")
-                        total = sum([count for _, count in preds])
-                        for num, count in preds:
-                            percentage = (count / total) * 100 if total > 0 else 0
-                            f.write(f"{num:^5} | {count:^10} | {percentage:>15.2f}%\n")
-                    else:
-                        f.write(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}\n")
-                        total = sum([score for _, score in preds])
-                        for num, score in preds:
-                            percentage = (score / total) * 100 if total > 0 else 0
-                            f.write(f"{num:^5} | {score:^10.4f} | {percentage:>15.2f}%\n")
-                
-                f.write("\n")
-            
-            # Ghi kết quả cuối cùng
-            f.write("\nKẾT QUẢ DỰ ĐOÁN CUỐI CÙNG:\n")
-            f.write("=" * 40 + "\n")
-            f.write(f"{'Số':^5} | {'Điểm':^10} | {'Phần trăm (%)':<15}\n")
-            f.write("=" * 40 + "\n")
-            
-            combined = results.get('Kết hợp', [])
-            total_score = sum([score for _, score in combined])
-            
-            for num, score in combined:
-                percentage = (score / total_score) * 100 if total_score > 0 else 0
-                f.write(f"{num:^5} | {score:^10.4f} | {percentage:>15.2f}%\n")
-        
-        print(f"\n💾 Đã lưu kết quả dự đoán vào file {filename}")
 
-
-def main():
+# Định nghĩa lớp mô hình LSTM với PyTorch
+class LSTMModel(nn.Module):
     """
-    Hàm chính để chạy chương trình.
+    Mô hình LSTM sử dụng PyTorch.
     """
-    # Phân tích tham số dòng lệnh
-    parser = argparse.ArgumentParser(
-        description='Dự đoán kết quả xổ số dựa trên dữ liệu lịch sử.',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
-    
-    parser.add_argument('--data', '-d', required=True,
-                        help='Đường dẫn đến file JSON chứa dữ liệu lịch sử.')
-    
-    parser.add_argument('--top', '-t', type=int, default=10,
-                        help='Số lượng con số muốn dự đoán.')
-    
-    parser.add_argument('--train', '-tr', action='store_true',
-                        help='Huấn luyện các mô hình học máy.')
-    
-    parser.add_argument('--load', '-l', action='store_true',
-                        help='Tải các mô hình đã lưu.')
-    
-    parser.add_argument('--visualize', '-v', action='store_true',
-                        help='Hiển thị biểu đồ phân tích dữ liệu.')
-    
-    parser.add_argument('--hot', type=int, default=0,
-                        help='Hiển thị N số nóng (số xuất hiện nhiều nhất).')
-    
-    parser.add_argument('--cold', type=int, default=0,
-                        help='Hiển thị N số lạnh (số lâu không xuất hiện).')
-    
-    parser.add_argument('--pairs', type=int, default=0,
-                        help='Hiển thị N cặp số hay xuất hiện cùng nhau.')
-    
-    parser.add_argument('--use-lstm', action='store_true',
-                        help='Cố gắng sử dụng mô hình LSTM (yêu cầu TensorFlow).')
-    
-    args = parser.parse_args()
-    
-    try:
-        # Hiển thị thông tin tiến trình
-        print("🚀 Bắt đầu chương trình dự đoán xổ số...")
-        print(f"📂 Đường dẫn dữ liệu: {args.data}")
-        print(f"🔢 Số lượng dự đoán: {args.top}")
-        print("=" * 50)
+    def __init__(self, input_dim, hidden_dim, layer_dim, output_dim, dropout_prob):
+        """
+        Khởi tạo mô hình LSTM.
         
-        # Tạo đối tượng phân tích
-        analyzer = LotteryAnalyzer(args.data)
+        Args:
+            input_dim (int): Kích thước đầu vào.
+            hidden_dim (int): Kích thước lớp ẩn.
+            layer_dim (int): Số lớp LSTM.
+            output_dim (int): Kích thước đầu ra.
+            dropout_prob (float): Xác suất dropout.
+        """
+        super(LSTMModel, self).__init__()
         
-        # Hiển thị % tiến trình
-        print("⏳ Tiến trình: 10% - Đọc dữ liệu")
-        analyzer.load_data()
+        # Định nghĩa các tham số
+        self.hidden_dim = hidden_dim
+        self.layer_dim = layer_dim
         
-        print("⏳ Tiến trình: 25% - Xử lý dữ liệu")
-        analyzer.preprocess_data()
+        # Lớp LSTM
+        self.lstm = nn.LSTM(
+            input_dim, hidden_dim, layer_dim, 
+            batch_first=True, dropout=dropout_prob
+        )
         
-        # Hiển thị thông tin phân tích nếu cần
-        if args.visualize:
-            print("⏳ Tiến trình: 35% - Trực quan hóa dữ liệu")
-            analyzer.visualize_number_frequency()
+        # Lớp normalization
+        self.batch_norm = nn.BatchNorm1d(hidden_dim)
+        
+        # Lớp dropout
+        self.dropout = nn.Dropout(dropout_prob)
+        
+        # Lớp fully connected đầu ra
+        self.fc1 = nn.Linear(hidden_dim, hidden_dim // 2)
+        self.fc2 = nn.Linear(hidden_dim // 2, output_dim)
+        
+        # Hàm kích hoạt
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+        
+    def forward(self, x):
+        """
+        Truyền dữ liệu qua mô hình.
+        
+        Args:
+            x (torch.Tensor): Dữ liệu đầu vào có kích thước (batch_size, seq_len, input_dim).
             
-            # Phân tích phân phối các số
-            distribution = analyzer.analyze_number_distribution()
-            
-            # Hiển thị phân phối theo chữ số đầu
-            plt.figure(figsize=(10, 6))
-            first_digits = sorted(distribution['first_digit'].items())
-            plt.bar([x[0] for x in first_digits], [x[1] for x in first_digits], color='seagreen')
-            plt.title('Phân phối theo chữ số đầu', fontsize=14)
-            plt.xlabel('Chữ số đầu', fontsize=12)
-            plt.ylabel('Tần suất', fontsize=12)
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-            plt.show()
-            
-            # Hiển thị phân phối theo chữ số cuối
-            plt.figure(figsize=(10, 6))
-            second_digits = sorted(distribution['second_digit'].items())
-            plt.bar([x[0] for x in second_digits], [x[1] for x in second_digits], color='indianred')
-            plt.title('Phân phối theo chữ số cuối', fontsize=14)
-            plt.xlabel('Chữ số cuối', fontsize=12)
-            plt.ylabel('Tần suất', fontsize=12)
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-            plt.show()
-            
-            # Hiển thị phân phối theo tổng chữ số
-            plt.figure(figsize=(12, 6))
-            sum_digits = sorted(distribution['sum_digits'].items())
-            plt.bar([x[0] for x in sum_digits], [x[1] for x in sum_digits], color='royalblue')
-            plt.title('Phân phối theo tổng chữ số', fontsize=14)
-            plt.xlabel('Tổng chữ số', fontsize=12)
-            plt.ylabel('Tần suất', fontsize=12)
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-            plt.show()
-            
-            # Hiển thị phân phối chẵn/lẻ
-            plt.figure(figsize=(8, 6))
-            even_odd = distribution['even_odd']
-            plt.pie([even_odd['even'], even_odd['odd'], even_odd['mixed']],
-                    labels=['Chẵn-Chẵn', 'Lẻ-Lẻ', 'Hỗn hợp'],
-                    autopct='%1.1f%%',
-                    startangle=90,
-                    colors=['lightcoral', 'lightblue', 'lightgreen'])
-            plt.title('Phân phối số theo tính chất chẵn/lẻ', fontsize=14)
-            plt.show()
-            
-            # Hiển thị xu hướng của 5 số phổ biến
-            hot_numbers = [x[0] for x in analyzer.get_hot_numbers(5)]
-            analyzer.visualize_trends(hot_numbers)
+        Returns:
+            torch.Tensor: Giá trị dự đoán.
+        """
+        # Khởi tạo trạng thái ẩn
+        h0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).to(x.device)
+        c0 = torch.zeros(self.layer_dim, x.size(0), self.hidden_dim).to(x.device)
         
-        # Hiển thị số nóng nếu cần
-        if args.hot > 0:
-            print("⏳ Tiến trình: 40% - Phân tích số nóng")
-            hot_numbers = analyzer.get_hot_numbers(args.hot)
-            print("\n🔥 Các số nóng (xuất hiện nhiều nhất):")
-            print("-" * 30)
-            print(f"{'Số':^5} | {'Tần suất':^10}")
-            print("-" * 30)
-            for num, count in hot_numbers:
-                print(f"{num:^5} | {count:^10}")
+        # Truyền qua LSTM
+        out, _ = self.lstm(x, (h0, c0))
         
-        # Hiển thị số lạnh nếu cần
-        if args.cold > 0:
-            print("⏳ Tiến trình: 45% - Phân tích số lạnh")
-            cold_numbers = analyzer.get_cold_numbers(args.cold)
-            print("\n❄️ Các số lạnh (lâu không xuất hiện):")
-            print("-" * 30)
-            print(f"{'Số':^5} | {'Số ngày':^10}")
-            print("-" * 30)
-            for num, days in cold_numbers:
-                if days == float('inf'):
-                    print(f"{num:^5} | {'Chưa xuất hiện':^10}")
-                else:
-                    print(f"{num:^5} | {days:^10}")
+        # Lấy đầu ra từ bước cuối cùng
+        out = out[:, -1, :]
         
-        # Hiển thị cặp số nếu cần
-        if args.pairs > 0:
-            print("⏳ Tiến trình: 50% - Phân tích cặp số")
-            hot_pairs = analyzer.get_hot_pairs(args.pairs)
-            print("\n👫 Các cặp số hay xuất hiện cùng nhau:")
-            print("-" * 30)
-            print(f"{'Cặp số':^10} | {'Tần suất':^10}")
-            print("-" * 30)
-            for pair, count in hot_pairs:
-                print(f"{pair[0]}-{pair[1]:^10} | {count:^10}")
+        # Chuẩn hóa batch
+        out = self.batch_norm(out)
         
-        # Tạo đối tượng dự đoán
-        print("⏳ Tiến trình: 55% - Khởi tạo mô hình dự đoán")
-        predictor = LotteryPredictor(analyzer)
+        # Đi qua lớp fully connected
+        out = self.fc1(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.fc2(out)
         
-        # Tải mô hình nếu cần
-        if args.load:
-            print("⏳ Tiến trình: 60% - Tải mô hình đã lưu")
-            predictor.load_models()
+        # Áp dụng sigmoid cho đầu ra
+        out = self.sigmoid(out)
         
-        # Huấn luyện mô hình nếu cần
-        if args.train:
-            print("⏳ Tiến trình: 65% - Huấn luyện mô hình học máy")
-            # Huấn luyện mô hình học máy
-            predictor.train_machine_learning_model()
-            
-            print("⏳ Tiến trình: 75% - Tạo mô hình tổng hợp")
-            # Tạo mô hình tổng hợp
-            predictor.create_ensemble_model()
-            
-            # Huấn luyện mô hình LSTM nếu có
-            if args.use_lstm and TENSORFLOW_AVAILABLE:
-                print("⏳ Tiến trình: 85% - Huấn luyện mô hình LSTM")
-                predictor.train_lstm_model()
-        
-        # Tạo báo cáo dự đoán
-        print("⏳ Tiến trình: 95% - Tạo báo cáo dự đoán")
-        predictor.generate_report(args.top)
-        
-        print("\n✅ Tiến trình: 100% - Hoàn thành!")
-        print("=" * 50)
-        
-    except Exception as e:
-        print(f"\n❌ Lỗi: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
-    
-    return 0
-
-if __name__ == "__main__":
-    main()
+        return out
